@@ -1,24 +1,31 @@
 # Relay
 
-Lightweight, shared clients for internal services (github, datahub, notify),
-built on a common httpx transport (timeout, `max_retries`, 429 `Retry-After`
-backoff) living in `conduit.core`.
+Lightweight, shared clients for internal services (github, datahub, notify,
+bucket_manager), built on a common httpx transport (timeout, `max_retries`, 429
+`Retry-After` backoff) living in `relay.core`.
 
 ## Install
 
-Pinned tag over Git SSH:
+Pinned commit over Git SSH:
 
-    uv add "conduit @ git+ssh://git@github.com/apikcloud/relay.git@v0.1.0"
+    uv add "relay @ git+ssh://git@github.com/apikcloud/relay.git@<commit-sha>"
 
 Pull only what a service needs via extras:
 
-    uv add "conduit[github] @ git+ssh://git@github.com/apikcloud/relay.git@v0.1.0"
+    uv add "relay[github] @ git+ssh://git@github.com/apikcloud/relay.git@<commit-sha>"
 
-`notify` and `core` need no extra — httpx only.
+`core` needs no extra — httpx only.
 
 ## Usage
 
-    from relay.notify import notify
-    from relay.github import GitHubClient
+    from relay.notify.client import NotifyClient
+    from relay.github.client import GithubClient
+    from relay.bucket_manager.client import BucketManager
+    from relay.datahub.client import DatahubClient
 
-Each client composes its own config around `conduit.core.config.TransportConfig`.
+    notifier = NotifyClient.from_env()
+    notifier.failure(title="job", body="something broke")
+
+Each client composes its own config around `relay.core.config.TransportConfig`,
+and exposes a `from_env()` constructor plus an `is_active` property (a missing
+or invalid env config yields an inactive, no-op instance instead of raising).
