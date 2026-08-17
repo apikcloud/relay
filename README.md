@@ -1,8 +1,8 @@
 # Relay
 
 Lightweight, shared clients for internal services (github, datahub, notify,
-bucket_manager), built on a common httpx transport (timeout, `max_retries`, 429
-`Retry-After` backoff) living in `relay.core`.
+bucket_manager, monitoring), built on a common httpx transport (timeout, `max_retries`,
+429 `Retry-After` backoff) living in `relay.core`.
 
 ## Install
 
@@ -22,6 +22,7 @@ Pull only what a service needs via extras:
     from relay.github.client import GithubClient
     from relay.bucket_manager.client import BucketManager
     from relay.datahub.client import DatahubClient
+    from relay.monitoring.client import MonitoringClient
 
     notifier = NotifyClient.from_env()
     notifier.failure(title="job", body="something broke")

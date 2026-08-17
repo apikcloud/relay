@@ -59,10 +59,12 @@ def build_client(
     transport: TransportConfig,
     base_url: str = "",
     headers: dict | None = None,
+    auth: tuple[str, str] | httpx.Auth | None = None,
 ) -> httpx.Client:
     return httpx.Client(
         base_url=base_url,
         headers=headers or {},
         timeout=transport.timeout,
         transport=RetryTransport(transport),
+        auth=auth,
     )
