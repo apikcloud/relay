@@ -12,8 +12,9 @@ from .config import DatahubConfig
 class DatahubClientProtocol(Protocol):
     def create_item(self, collection: str, data: dict) -> dict: ...
     def update_item(self, collection: str, item_id: int, data: dict) -> dict: ...
+    def delete_item(self, collection: str, item_id: int) -> None: ...
     def list_items(
-        self, collection: str, filter_: dict, limit: int = -1
+        self, collection: str, filter_: dict, limit: int = -1, fields: str | None = None
     ) -> list[dict]: ...
 
 
@@ -36,10 +37,16 @@ class DatahubClient:
         resp.raise_for_status()
         return resp.json()["data"] if resp.content else {}
 
-    def list_items(self, collection: str, filter_: dict, limit: int = -1) -> list[dict]:
-        resp = self._client.get(
-            f"/items/{collection}",
-            params={"filter": json.dumps(filter_), "limit": limit},
-        )
+    def delete_item(self, collection: str, item_id: int) -> None:
+        resp = self._client.delete(f"/items/{collection}/{item_id}")
+        resp.raise_for_status()
+
+    def list_items(
+        self, collection: str, filter_: dict, limit: int = -1, fields: str | None = None
+    ) -> list[dict]:
+        params = {"filter": json.dumps(filter_), "limit": limit}
+        if fields:
+            params["fields"] = fields
+        resp = self._client.get(f"/items/{collection}", params=params)
         resp.raise_for_status()
         return resp.json()["data"]

@@ -2,6 +2,13 @@
 
 This page summarizes what's new and fixed in each version.
 
+## [0.2.0] - 2026-08-17
+
+### ✨ What's new
+
+- DataHub client can now request specific fields (for eager-loading
+  relations) and delete items
+
 ## [0.1.0] - 2026-08-17
 
 First release of `relay` — a shared toolkit of lightweight clients for internal services. 🎉
