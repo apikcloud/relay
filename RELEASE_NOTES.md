@@ -2,6 +2,12 @@
 
 This page summarizes what's new and fixed in each version.
 
+## [0.3.0] - 2026-08-17
+
+### ✨ What's new
+
+- New monitoring client for checking service status and uptime
+
 ## [0.2.0] - 2026-08-17
 
 ### ✨ What's new
