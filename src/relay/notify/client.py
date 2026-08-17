@@ -13,7 +13,7 @@ class NotifyClient:
     """Talks to the shared `notify-gateway` (an Apprise API instance).
 
     `config.base_url` is the full notify endpoint for our config key, e.g.
-    ``http://notify-gateway.monitoring.svc.cluster.local:8000/notify/internal``.
+    ``http://notify-gateway.notifications.svc.cluster.local:8000/notify/internal``.
     If `config` is None, every call is a no-op — same "optional notifier"
     behavior as before.
     """
