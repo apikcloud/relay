@@ -2,6 +2,12 @@
 
 This page summarizes what's new and fixed in each version.
 
+## [0.3.1] - 2026-08-18
+
+### 🐛 Fixes
+
+- Fixed an issue where monitoring status checks could hang indefinitely against certain Gatus setups
+
 ## [0.3.0] - 2026-08-17
 
 ### ✨ What's new
