@@ -60,6 +60,10 @@ class GithubClient:
             },
             transport=config.transport,
         )
+        # Rate-limit headers from the most recent GraphQL response — callers
+        # that sweep many repos read this after each batch to observe real
+        # consumption rather than guessing a request budget upfront.
+        self.last_rate_limit: dict[str, str] = {}
 
     def get_ref_sha(self, branch: str) -> str:
         """SHA the tip of `branch` currently points at."""
@@ -138,6 +142,11 @@ class GithubClient:
             _GRAPHQL_PATH, json={"query": query, "variables": variables}
         )
         resp.raise_for_status()
+        self.last_rate_limit = {
+            k[len("x-ratelimit-") :]: v
+            for k, v in resp.headers.items()
+            if k.lower().startswith("x-ratelimit-")
+        }
         body = resp.json()
         if body.get("errors"):
             raise GraphQLError(str(body["errors"]))

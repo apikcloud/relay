@@ -23,6 +23,29 @@ def test_graphql_raises_on_errors_array():
         client.graphql("query {}", {})
 
 
+def test_graphql_captures_rate_limit_headers():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"data": {}},
+            headers={
+                "X-RateLimit-Remaining": "4987",
+                "X-RateLimit-Reset": "1700000000",
+                "X-RateLimit-Limit": "5000",
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    client.graphql("query {}", {})
+
+    assert client.last_rate_limit == {
+        "remaining": "4987",
+        "reset": "1700000000",
+        "limit": "5000",
+    }
+
+
 def test_sweep_branch_heads_aliasing():
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
