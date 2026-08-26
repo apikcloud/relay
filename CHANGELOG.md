@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-26
+
+### Added
+
+- `GithubClient.graphql` — raw GraphQL call, raising on both HTTP errors and a
+  non-empty top-level `errors` array
+- `GithubClient.sweep_branch_heads` — branch name -> head oid per repo, via
+  aliased/batched GraphQL, with per-repo pagination for repos with >100
+  branches
+- `GithubClient.list_tree` — flattened recursive tree listing via REST Git
+  Trees; raises `TreeTruncatedError` if GitHub truncates the response
+- `GithubClient.compare` — changed file paths between two refs, reporting
+  truncation via `CompareResult.truncated`
+- `GithubClient.get_blobs_text` — batched blob text fetch via aliased
+  GraphQL, mapping an unresolvable path to `None` instead of raising
+- `GithubClient.list_org_repos` — paginated REST listing of every repo in an
+  org
+- `GithubClient(config, repo=...)` — `repo` is now optional; the new
+  operations above take `repo` per call instead of being bound to one repo
+
 ## [0.3.1] - 2026-08-18
 
 ### Fixed
