@@ -7,6 +7,63 @@ from relay.github.client import GithubClient, GraphQLError, TreeTruncatedError
 from relay.github.config import GithubConfig
 
 
+def test_from_env_prefers_app_vars_when_present(monkeypatch):
+    monkeypatch.setenv("GITHUB_APP_ID", "12345")
+    monkeypatch.setenv("GITHUB_APP_INSTALLATION_ID", "67890")
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\n...")
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    config = GithubConfig.from_env()
+
+    assert config.app_id == "12345"
+    assert config.installation_id == "67890"
+    assert config.token is None
+
+
+def test_from_env_prefers_app_vars_over_token_when_both_set(monkeypatch):
+    monkeypatch.setenv("GITHUB_APP_ID", "12345")
+    monkeypatch.setenv("GITHUB_APP_INSTALLATION_ID", "67890")
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\n...")
+    monkeypatch.setenv("GITHUB_TOKEN", "secret")
+
+    config = GithubConfig.from_env()
+
+    assert config.app_id == "12345"
+    assert config.token is None
+
+
+def test_from_env_falls_back_to_token_when_no_app_vars(monkeypatch):
+    monkeypatch.delenv("GITHUB_APP_ID", raising=False)
+    monkeypatch.delenv("GITHUB_APP_INSTALLATION_ID", raising=False)
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY", raising=False)
+    monkeypatch.setenv("GITHUB_TOKEN", "secret")
+
+    config = GithubConfig.from_env()
+
+    assert config.token == "secret"
+    assert config.app_id is None
+
+
+def test_from_env_raises_on_partial_app_vars(monkeypatch):
+    monkeypatch.setenv("GITHUB_APP_ID", "12345")
+    monkeypatch.delenv("GITHUB_APP_INSTALLATION_ID", raising=False)
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    with pytest.raises(ValueError):
+        GithubConfig.from_env()
+
+
+def test_from_env_raises_when_neither_set(monkeypatch):
+    monkeypatch.delenv("GITHUB_APP_ID", raising=False)
+    monkeypatch.delenv("GITHUB_APP_INSTALLATION_ID", raising=False)
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    with pytest.raises(KeyError):
+        GithubConfig.from_env()
+
+
 def _make_client(handler: httpx.MockTransport) -> GithubClient:
     client = GithubClient(GithubConfig(token="secret", base_url="http://github.test"))
     client._client = httpx.Client(base_url="http://github.test", transport=handler)

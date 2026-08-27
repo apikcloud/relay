@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-27
+
+### Added
+
+- `GithubConfig` accepts GitHub App credentials (`app_id`, `installation_id`,
+  `private_key`) as an alternative to a PAT `token`; `from_env()` prefers
+  App env vars (`GITHUB_APP_ID`/`GITHUB_APP_INSTALLATION_ID`/
+  `GITHUB_APP_PRIVATE_KEY`) when present, falling back to `GITHUB_TOKEN`,
+  and raises clearly on a partial App config or on neither being set
+- `GithubAppAuth` — `httpx.Auth` implementation that signs RS256 JWTs and
+  exchanges them for GitHub App installation access tokens, caching and
+  proactively refreshing before expiry (and reactively on a 401)
+- `GithubClient` transparently uses `GithubAppAuth` when `GithubConfig` is
+  built with App credentials instead of a token
+
 ## [0.4.1] - 2026-08-26
 
 ### Added

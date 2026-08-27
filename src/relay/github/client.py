@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..core.transport import build_client
+from .app_auth import GithubAppAuth
 from .config import GithubConfig
 
 _GRAPHQL_PATH = "/graphql"
@@ -51,14 +52,26 @@ def _chunk(items: list[str], size: int) -> Iterator[list[str]]:
 class GithubClient:
     def __init__(self, config: GithubConfig, repo: str | None = None) -> None:
         self.repo = repo
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        auth = None
+        if config.token is not None:
+            headers["Authorization"] = f"Bearer {config.token}"
+        else:
+            auth = GithubAppAuth(
+                config.app_id,
+                config.installation_id,
+                config.private_key,
+                config.base_url,
+                config.transport,
+            )
         self._client = build_client(
             base_url=config.base_url,
-            headers={
-                "Authorization": f"Bearer {config.token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
+            headers=headers,
             transport=config.transport,
+            auth=auth,
         )
         # Rate-limit headers from the most recent GraphQL response — callers
         # that sweep many repos read this after each batch to observe real
