@@ -56,6 +56,13 @@ class SweepResult:
     unresolved: list[str]  # repos GitHub reported NOT_FOUND for
 
 
+@dataclass(slots=True)
+class TreeEntry:
+    path: str
+    type: str  # "blob" | "tree" | "commit" (commit = git submodule)
+    mode: str  # e.g. "100644" (file), "120000" (symlink), "160000" (submodule)
+
+
 def _chunk(items: list[str], size: int) -> Iterator[list[str]]:
     for i in range(0, len(items), size):
         yield items[i : i + size]
@@ -264,8 +271,11 @@ class GithubClient:
             )
         return heads
 
-    def list_tree(self, repo: str, sha: str) -> list[str]:
-        """Flattened blob paths of the full tree at `sha`, one REST call.
+    def list_tree(self, repo: str, sha: str) -> list[TreeEntry]:
+        """Every entry (blob, tree, and commit/submodule) of the full tree
+        at `sha`, one REST call — unfiltered, so callers can distinguish a
+        real file from a symlink (`mode == "120000"`) or a git submodule
+        (`type == "commit"`) instead of both being silently dropped.
 
         Raises `TreeTruncatedError` if GitHub truncates the listing —
         callers must decide how to handle a partial tree explicitly."""
@@ -276,7 +286,10 @@ class GithubClient:
         body = resp.json()
         if body.get("truncated"):
             raise TreeTruncatedError(repo, sha)
-        return [entry["path"] for entry in body["tree"] if entry["type"] == "blob"]
+        return [
+            TreeEntry(path=entry["path"], type=entry["type"], mode=entry["mode"])
+            for entry in body["tree"]
+        ]
 
     def compare(self, repo: str, base: str, head: str) -> CompareResult:
         """Changed file paths between `base` and `head`.

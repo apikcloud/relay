@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from relay.github.client import GithubClient, GraphQLError, TreeTruncatedError
+from relay.github.client import GithubClient, GraphQLError, TreeEntry, TreeTruncatedError
 from relay.github.config import GithubConfig
 
 
@@ -337,24 +337,43 @@ def test_list_tree_raises_on_truncation():
         client.list_tree("odoo/odoo", "deadbeef")
 
 
-def test_list_tree_filters_to_blobs():
+def test_list_tree_returns_all_entry_types():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
             json={
                 "truncated": False,
                 "tree": [
-                    {"path": "addons/sale", "type": "tree"},
-                    {"path": "addons/sale/__manifest__.py", "type": "blob"},
+                    {"path": "addons/sale", "type": "tree", "mode": "040000"},
+                    {
+                        "path": "addons/sale/__manifest__.py",
+                        "type": "blob",
+                        "mode": "100644",
+                    },
+                    {
+                        "path": "addons/sale/link.py",
+                        "type": "blob",
+                        "mode": "120000",
+                    },
+                    {
+                        "path": "addons/vendored",
+                        "type": "commit",
+                        "mode": "160000",
+                    },
                 ],
             },
         )
 
     client = _make_client(httpx.MockTransport(handler))
 
-    paths = client.list_tree("odoo/odoo", "deadbeef")
+    entries = client.list_tree("odoo/odoo", "deadbeef")
 
-    assert paths == ["addons/sale/__manifest__.py"]
+    assert entries == [
+        TreeEntry(path="addons/sale", type="tree", mode="040000"),
+        TreeEntry(path="addons/sale/__manifest__.py", type="blob", mode="100644"),
+        TreeEntry(path="addons/sale/link.py", type="blob", mode="120000"),
+        TreeEntry(path="addons/vendored", type="commit", mode="160000"),
+    ]
 
 
 def test_compare_reports_truncation_when_files_missing():
