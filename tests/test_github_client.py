@@ -132,10 +132,11 @@ def test_sweep_branch_heads_aliasing():
 
     result = client.sweep_branch_heads(["oca/repo-a", "oca/repo-b"])
 
-    assert result == {
+    assert result.heads == {
         "oca/repo-a": {"16.0": "aaa"},
         "oca/repo-b": {"17.0": "bbb"},
     }
+    assert result.unresolved == []
 
 
 def test_sweep_branch_heads_paginates_per_repo():
@@ -177,8 +178,153 @@ def test_sweep_branch_heads_paginates_per_repo():
 
     result = client.sweep_branch_heads(["oca/repo-a"])
 
-    assert result == {"oca/repo-a": {"16.0": "aaa", "17.0": "bbb"}}
+    assert result.heads == {"oca/repo-a": {"16.0": "aaa", "17.0": "bbb"}}
+    assert result.unresolved == []
     assert calls["n"] == 2
+
+
+def test_graphql_error_carries_structured_errors():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"errors": [{"type": "NOT_FOUND", "path": ["r0"], "message": "nope"}]},
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    with pytest.raises(GraphQLError) as exc_info:
+        client.graphql("query {}", {})
+
+    assert exc_info.value.errors == [
+        {"type": "NOT_FOUND", "path": ["r0"], "message": "nope"}
+    ]
+
+
+def test_sweep_branch_heads_isolates_single_not_found():
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        body = json.loads(request.content)
+        if calls["n"] == 1:
+            assert "r0" in body["query"]
+            assert "r1" in body["query"]
+            return httpx.Response(
+                200,
+                json={
+                    "errors": [
+                        {
+                            "type": "NOT_FOUND",
+                            "path": ["r1"],
+                            "message": (
+                                "Could not resolve to a Repository with the "
+                                "name 'oca/missing'."
+                            ),
+                        }
+                    ]
+                },
+            )
+        assert "r0" in body["query"]
+        assert "r1" not in body["query"]
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "r0": {
+                        "refs": {
+                            "nodes": [{"name": "16.0", "target": {"oid": "aaa"}}],
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        }
+                    }
+                }
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    result = client.sweep_branch_heads(["oca/repo-a", "oca/missing"])
+
+    assert result.heads == {"oca/repo-a": {"16.0": "aaa"}}
+    assert result.unresolved == ["oca/missing"]
+    assert calls["n"] == 2
+
+
+def test_sweep_branch_heads_isolates_multiple_not_found_in_one_retry():
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(
+                200,
+                json={
+                    "errors": [
+                        {"type": "NOT_FOUND", "path": ["r0"], "message": "nope"},
+                        {"type": "NOT_FOUND", "path": ["r2"], "message": "nope"},
+                    ]
+                },
+            )
+        body = json.loads(request.content)
+        assert "r0" in body["query"]
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "r0": {
+                        "refs": {
+                            "nodes": [{"name": "16.0", "target": {"oid": "bbb"}}],
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        }
+                    }
+                }
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    result = client.sweep_branch_heads(
+        ["oca/missing-a", "oca/repo-b", "oca/missing-c"]
+    )
+
+    assert result.heads == {"oca/repo-b": {"16.0": "bbb"}}
+    assert set(result.unresolved) == {"oca/missing-a", "oca/missing-c"}
+    assert calls["n"] == 2
+
+
+def test_sweep_branch_heads_all_not_found_no_extra_call():
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(
+            200,
+            json={"errors": [{"type": "NOT_FOUND", "path": ["r0"], "message": "nope"}]},
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    result = client.sweep_branch_heads(["oca/missing"])
+
+    assert result.heads == {}
+    assert result.unresolved == ["oca/missing"]
+    assert calls["n"] == 1
+
+
+def test_sweep_branch_heads_raises_on_non_not_found_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "errors": [
+                    {"type": "RATE_LIMITED", "path": ["r0"], "message": "slow down"}
+                ]
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    with pytest.raises(GraphQLError):
+        client.sweep_branch_heads(["oca/repo-a"])
 
 
 def test_list_tree_raises_on_truncation():

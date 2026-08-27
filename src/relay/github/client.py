@@ -24,7 +24,13 @@ _GRAPHQL_PATH = "/graphql"
 
 
 class GraphQLError(Exception):
-    """Raised when a GraphQL response carries a non-empty top-level `errors`."""
+    """Raised when a GraphQL response carries a non-empty top-level
+    `errors`. `errors` keeps the raw error objects so callers can inspect
+    `type`/`path` instead of parsing the stringified message."""
+
+    def __init__(self, errors: list[dict[str, Any]]) -> None:
+        super().__init__(str(errors))
+        self.errors = errors
 
 
 class TreeTruncatedError(Exception):
@@ -42,6 +48,12 @@ class TreeTruncatedError(Exception):
 class CompareResult:
     files: list[str]
     truncated: bool
+
+
+@dataclass(slots=True)
+class SweepResult:
+    heads: dict[str, dict[str, str]]
+    unresolved: list[str]  # repos GitHub reported NOT_FOUND for
 
 
 def _chunk(items: list[str], size: int) -> Iterator[list[str]]:
@@ -162,20 +174,26 @@ class GithubClient:
         }
         body = resp.json()
         if body.get("errors"):
-            raise GraphQLError(str(body["errors"]))
+            raise GraphQLError(body["errors"])
         return body["data"]
 
     def sweep_branch_heads(
         self, repos: list[str], batch_size: int = 40
-    ) -> dict[str, dict[str, str]]:
-        """Branch name -> head oid, per repo, via aliased GraphQL batches."""
-        result: dict[str, dict[str, str]] = {}
+    ) -> SweepResult:
+        """Branch name -> head oid, per repo full_name, batched to keep each
+        GraphQL request within a safe node-count budget. A repo GitHub
+        reports NOT_FOUND for (nonexistent, or invisible to the current
+        credentials) is isolated to `unresolved` and does not fail the rest
+        of the batch; any other GraphQL error still raises."""
+        heads: dict[str, dict[str, str]] = {}
+        unresolved: list[str] = []
         for batch in _chunk(repos, batch_size):
-            result.update(self._sweep_batch(batch))
-        return result
+            result = self._sweep_batch(batch)
+            heads.update(result.heads)
+            unresolved.extend(result.unresolved)
+        return SweepResult(heads=heads, unresolved=unresolved)
 
-    def _sweep_batch(self, repos: list[str]) -> dict[str, dict[str, str]]:
-        aliases = {f"r{i}": repo for i, repo in enumerate(repos)}
+    def _sweep_query(self, aliases: dict[str, str]) -> str:
         fields = "\n".join(
             f'{alias}: repository(owner: {json.dumps(owner)}, name: {json.dumps(name)}) '
             '{ refs(refPrefix: "refs/heads/", first: 100) '
@@ -184,8 +202,11 @@ class GithubClient:
                 (alias, repo.split("/", 1)) for alias, repo in aliases.items()
             )
         )
-        data = self.graphql(f"query {{ {fields} }}", {})
+        return f"query {{ {fields} }}"
 
+    def _parse_sweep_batch(
+        self, aliases: dict[str, str], data: dict[str, Any]
+    ) -> SweepResult:
         out: dict[str, dict[str, str]] = {}
         pending: list[tuple[str, str]] = []
         for alias, repo in aliases.items():
@@ -200,7 +221,27 @@ class GithubClient:
 
         for repo, cursor in pending:
             out[repo].update(self._sweep_paginate(repo, cursor))
-        return out
+        return SweepResult(heads=out, unresolved=[])
+
+    def _sweep_batch(self, repos: list[str]) -> SweepResult:
+        aliases = {f"r{i}": repo for i, repo in enumerate(repos)}
+        try:
+            data = self.graphql(self._sweep_query(aliases), {})
+        except GraphQLError as exc:
+            not_found_aliases = {
+                err["path"][0]
+                for err in exc.errors
+                if err.get("type") == "NOT_FOUND" and err.get("path")
+            }
+            if not not_found_aliases or not_found_aliases - aliases.keys():
+                raise  # an error we can't attribute to a specific repo — surface it
+            unresolved = [aliases[alias] for alias in not_found_aliases]
+            remaining = [r for r in repos if r not in unresolved]
+            retried = self._sweep_batch(remaining) if remaining else SweepResult({}, [])
+            return SweepResult(
+                heads=retried.heads, unresolved=unresolved + retried.unresolved
+            )
+        return self._parse_sweep_batch(aliases, data)
 
     def _sweep_paginate(self, repo: str, cursor: str) -> dict[str, str]:
         owner, name = repo.split("/", 1)
