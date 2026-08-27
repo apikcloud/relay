@@ -327,6 +327,27 @@ def test_sweep_branch_heads_raises_on_non_not_found_error():
         client.sweep_branch_heads(["oca/repo-a"])
 
 
+def test_get_blob_content_decodes_base64():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/repos/odoo/odoo/contents/icon.png"
+        return httpx.Response(200, json={"content": "aGVsbG8=", "encoding": "base64"})
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    content = client.get_blob_content("odoo/odoo", "deadbeef", "icon.png")
+
+    assert content == b"hello"
+
+
+def test_get_blob_content_returns_none_on_404():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"message": "Not Found"})
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    assert client.get_blob_content("odoo/odoo", "deadbeef", "missing.png") is None
+
+
 def test_list_tree_raises_on_truncation():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"truncated": True, "tree": []})

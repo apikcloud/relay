@@ -291,6 +291,20 @@ class GithubClient:
             for entry in body["tree"]
         ]
 
+    def get_blob_content(self, repo: str, ref: str, path: str) -> bytes | None:
+        """Raw bytes of `path` at `ref`, via the REST Contents API — unlike
+        `get_blobs_text`'s GraphQL `Blob.text` (which returns null for a
+        blob GitHub doesn't detect as text), this works for binary files
+        such as icons. Returns None if `path` doesn't exist at `ref`, or if
+        GitHub omits `content` (files over ~1MB) — same "not available"
+        signal either way, callers don't need to distinguish."""
+        resp = self._client.get(f"/repos/{repo}/contents/{path}", params={"ref": ref})
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        content = resp.json().get("content")
+        return base64.b64decode(content) if content else None
+
     def compare(self, repo: str, base: str, head: str) -> CompareResult:
         """Changed file paths between `base` and `head`.
 
