@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-09-19
+
+### Added
+
+- `CartographerClient.available_modules(odoo_version, enterprise=False,
+  include_dependencies=False)` — `GET /v1/code/modules/available`, every
+  standard-tree module (core always, enterprise too when requested) Odoo
+  `odoo_version` actually ships, with real per-version manifest `depends`
+  when requested. One unpaginated call — no need to page through
+  `facets/kind/{kind}` and fetch `module_detail` per name.
+
 ## [0.10.0] - 2026-09-18
 
 ### Added

@@ -172,6 +172,79 @@ def test_resolve_returns_none_preferred_when_ambiguous():
     assert len(result.candidates) == 2
 
 
+def test_available_modules_sends_expected_params_and_parses_results():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/code/modules/available"
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json={
+                "odoo_version": "18.0",
+                "enterprise": True,
+                "count": 1,
+                "results": [
+                    {
+                        "module_name": "account",
+                        "repo": "odoo/odoo",
+                        "kind": "core",
+                        "name": "Invoicing",
+                        "summary": "Invoices, Payments, Follow-ups & Bank Synchronization",
+                        "license": "LGPL-3",
+                        "depends": ["base_setup", "onboarding", "product", "analytic"],
+                    }
+                ],
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    results = client.available_modules(
+        "18.0", enterprise=True, include_dependencies=True
+    )
+
+    assert captured["params"] == {
+        "odoo_version": "18.0",
+        "enterprise": "true",
+        "include_dependencies": "true",
+    }
+    assert len(results) == 1
+    assert results[0].module_name == "account"
+    assert results[0].repo == "odoo/odoo"
+    assert results[0].kind == "core"
+    assert results[0].depends == ["base_setup", "onboarding", "product", "analytic"]
+
+
+def test_available_modules_depends_none_when_not_requested():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "odoo_version": "18.0",
+                "enterprise": False,
+                "count": 1,
+                "results": [
+                    {
+                        "module_name": "base",
+                        "repo": "odoo/odoo",
+                        "kind": "core",
+                        "name": "Base",
+                        "summary": None,
+                        "license": "LGPL-3",
+                        "depends": None,
+                    }
+                ],
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    results = client.available_modules("18.0")
+
+    assert results[0].depends is None
+
+
 def test_resolve_expand_sends_expected_body_and_parses_ambiguous_unavailable():
     captured = {}
 

@@ -80,6 +80,17 @@ class ResolveResult:
     preferred: ResolveCandidate | None
 
 
+@dataclass(slots=True)
+class AvailableModule:
+    module_name: str
+    repo: str
+    kind: str
+    name: str | None
+    summary: str | None
+    license: str | None
+    depends: list[str] | None
+
+
 class CartographerClient:
     """Reads Cartographer's catalog — module discovery, classification,
     dependencies for client/custom repos, and Odoo base-image tags.
@@ -174,6 +185,40 @@ class CartographerClient:
             candidates=candidates,
             preferred=preferred,
         )
+
+    def available_modules(
+        self,
+        odoo_version: str,
+        enterprise: bool = False,
+        include_dependencies: bool = False,
+    ) -> list[AvailableModule]:
+        """Every standard-tree module Odoo `odoo_version` actually ships —
+        `core` always, `enterprise` too when requested — in one unpaginated
+        call (~650 rows core-only, ~1330 core+enterprise, at the busiest
+        version). `depends` is that module's real manifest depends at this
+        exact version when `include_dependencies` is true, else `None`."""
+        resp = self._client.get(
+            "/v1/code/modules/available",
+            params={
+                "odoo_version": odoo_version,
+                "enterprise": enterprise,
+                "include_dependencies": include_dependencies,
+            },
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        return [
+            AvailableModule(
+                module_name=m["module_name"],
+                repo=m["repo"],
+                kind=m["kind"],
+                name=m["name"],
+                summary=m["summary"],
+                license=m["license"],
+                depends=m["depends"],
+            )
+            for m in body["results"]
+        ]
 
     def resolve_expand(
         self, modules: list[tuple[str, str]], series: str, enterprise: bool = False
