@@ -184,9 +184,7 @@ class GithubClient:
             raise GraphQLError(body["errors"])
         return body["data"]
 
-    def sweep_branch_heads(
-        self, repos: list[str], batch_size: int = 40
-    ) -> SweepResult:
+    def sweep_branch_heads(self, repos: list[str], batch_size: int = 40) -> SweepResult:
         """Branch name -> head oid, per repo full_name, batched to keep each
         GraphQL request within a safe node-count budget. A repo GitHub
         reports NOT_FOUND for (nonexistent, or invisible to the current
@@ -202,7 +200,7 @@ class GithubClient:
 
     def _sweep_query(self, aliases: dict[str, str]) -> str:
         fields = "\n".join(
-            f'{alias}: repository(owner: {json.dumps(owner)}, name: {json.dumps(name)}) '
+            f"{alias}: repository(owner: {json.dumps(owner)}, name: {json.dumps(name)}) "
             '{ refs(refPrefix: "refs/heads/", first: 100) '
             "{ nodes { name target { oid } } pageInfo { hasNextPage endCursor } } }"
             for alias, (owner, name) in (
@@ -267,21 +265,26 @@ class GithubClient:
             refs = data["repository"]["refs"]
             heads.update({n["name"]: n["target"]["oid"] for n in refs["nodes"]})
             next_cursor = (
-                refs["pageInfo"]["endCursor"] if refs["pageInfo"]["hasNextPage"] else None
+                refs["pageInfo"]["endCursor"]
+                if refs["pageInfo"]["hasNextPage"]
+                else None
             )
         return heads
 
-    def list_tree(self, repo: str, sha: str) -> list[TreeEntry]:
-        """Every entry (blob, tree, and commit/submodule) of the full tree
-        at `sha`, one REST call — unfiltered, so callers can distinguish a
+    def list_tree(
+        self, repo: str, sha: str, *, recursive: bool = True
+    ) -> list[TreeEntry]:
+        """Every entry (blob, tree, and commit/submodule) of the tree at
+        `sha`, one REST call — unfiltered, so callers can distinguish a
         real file from a symlink (`mode == "120000"`) or a git submodule
         (`type == "commit"`) instead of both being silently dropped.
+        Recursive by default (unchanged behavior); `recursive=False` returns
+        only the immediate children of `sha`.
 
         Raises `TreeTruncatedError` if GitHub truncates the listing —
         callers must decide how to handle a partial tree explicitly."""
-        resp = self._client.get(
-            f"/repos/{repo}/git/trees/{sha}", params={"recursive": "1"}
-        )
+        params = {"recursive": "1"} if recursive else {}
+        resp = self._client.get(f"/repos/{repo}/git/trees/{sha}", params=params)
         resp.raise_for_status()
         body = resp.json()
         if body.get("truncated"):
@@ -290,6 +293,37 @@ class GithubClient:
             TreeEntry(path=entry["path"], type=entry["type"], mode=entry["mode"])
             for entry in body["tree"]
         ]
+
+    def create_tree(
+        self, repo: str, entries: list[dict[str, Any]], base_tree: str | None = None
+    ) -> str:
+        """Create a tree object from `entries` (each a raw GitHub tree-entry
+        dict: `path`, `mode`, `type`, and either `sha` (reuse an existing
+        blob/tree/gitlink) or `content` (create a new blob inline). With
+        `base_tree`, `entries` are layered on top of that tree — nested paths
+        auto-create intermediate trees; entries are otherwise a full explicit
+        listing (rebuild), the robust way to *remove* a root-level entry such
+        as a `160000` submodule gitlink, since `sha: null` deletion is only
+        documented for blobs. Returns the new tree's sha."""
+        payload: dict[str, Any] = {"tree": entries}
+        if base_tree:
+            payload["base_tree"] = base_tree
+        resp = self._client.post(f"/repos/{repo}/git/trees", json=payload)
+        resp.raise_for_status()
+        return resp.json()["sha"]
+
+    def create_commit(
+        self, repo: str, tree: str, parents: list[str], message: str
+    ) -> str:
+        """Create a commit object pointing at `tree` with the given `parents`.
+        Returns the new commit's sha. Does not move any ref — pair with
+        `create_branch` to point a new branch at it."""
+        resp = self._client.post(
+            f"/repos/{repo}/git/commits",
+            json={"message": message, "tree": tree, "parents": parents},
+        )
+        resp.raise_for_status()
+        return resp.json()["sha"]
 
     def get_blob_content(self, repo: str, ref: str, path: str) -> bytes | None:
         """Raw bytes of `path` at `ref`, via the REST Contents API — unlike

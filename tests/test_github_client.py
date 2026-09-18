@@ -397,6 +397,94 @@ def test_list_tree_returns_all_entry_types():
     ]
 
 
+def test_list_tree_non_recursive_omits_recursive_param():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json={
+                "truncated": False,
+                "tree": [{"path": "addons", "type": "tree", "mode": "040000"}],
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    entries = client.list_tree("odoo/odoo", "deadbeef", recursive=False)
+
+    assert captured["params"] == {}
+    assert entries == [TreeEntry(path="addons", type="tree", mode="040000")]
+
+
+def test_list_tree_recursive_default_sends_recursive_param():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"truncated": False, "tree": []})
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    client.list_tree("odoo/odoo", "deadbeef")
+
+    assert captured["params"] == {"recursive": "1"}
+
+
+def test_create_tree_without_base_tree():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(201, json={"sha": "newtreesha"})
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    entries = [{"path": "README.md", "mode": "100644", "type": "blob", "sha": "abc"}]
+    sha = client.create_tree("odoo/odoo", entries)
+
+    assert sha == "newtreesha"
+    assert captured["body"] == {"tree": entries}
+
+
+def test_create_tree_with_base_tree():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(201, json={"sha": "newtreesha"})
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    entries = [{"path": "odoo_version.txt", "mode": "100644", "type": "blob", "content": "19.0"}]
+    sha = client.create_tree("odoo/odoo", entries, base_tree="basetreesha")
+
+    assert sha == "newtreesha"
+    assert captured["body"] == {"tree": entries, "base_tree": "basetreesha"}
+
+
+def test_create_commit():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(201, json={"sha": "newcommitsha"})
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    sha = client.create_commit(
+        "odoo/odoo", tree="treesha", parents=["parentsha"], message="chore: vanilla base"
+    )
+
+    assert sha == "newcommitsha"
+    assert captured["body"] == {
+        "message": "chore: vanilla base",
+        "tree": "treesha",
+        "parents": ["parentsha"],
+    }
+
+
 def test_compare_reports_truncation_when_files_missing():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"total_commits": 5000})
