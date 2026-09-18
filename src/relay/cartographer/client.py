@@ -66,6 +66,20 @@ class BaseImageTag:
     edition: str | None
 
 
+@dataclass(slots=True)
+class ResolveCandidate:
+    repo: str
+    kind: str
+
+
+@dataclass(slots=True)
+class ResolveResult:
+    module_name: str
+    series: str
+    candidates: list[ResolveCandidate]
+    preferred: ResolveCandidate | None
+
+
 class CartographerClient:
     """Reads Cartographer's catalog — module discovery, classification,
     dependencies for client/custom repos, and Odoo base-image tags.
@@ -131,6 +145,35 @@ class CartographerClient:
         resp = self._client.get(f"/v1/code/custom/{repo}/refs")
         resp.raise_for_status()
         return resp.json()
+
+    def resolve(self, module_name: str, series: str) -> ResolveResult:
+        """Every provider-kind repo (core/enterprise/oca/third_party) that hosts
+        `module_name` at `series`, plus the same auto-pick `resolve_expand` uses
+        internally. Used to find which repo a real dependency name resolves to,
+        so its own `depends` can be fetched via `module_detail` — `resolve_expand`
+        deliberately excludes core/enterprise from its output and never returns
+        `depends` for anything, so it can't answer that question on its own."""
+        resp = self._client.get(
+            f"/v1/code/resolve/{module_name}", params={"series": series}
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        candidates = [
+            ResolveCandidate(repo=c["repo"], kind=c["kind"]) for c in body["candidates"]
+        ]
+        preferred = (
+            ResolveCandidate(
+                repo=body["preferred"]["repo"], kind=body["preferred"]["kind"]
+            )
+            if body.get("preferred")
+            else None
+        )
+        return ResolveResult(
+            module_name=body["module_name"],
+            series=body["series"],
+            candidates=candidates,
+            preferred=preferred,
+        )
 
     def resolve_expand(
         self, modules: list[tuple[str, str]], series: str, enterprise: bool = False

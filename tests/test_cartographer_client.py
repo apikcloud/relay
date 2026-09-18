@@ -118,6 +118,60 @@ def test_live_refs_returns_branches_and_tags():
     assert refs == {"branches": {"19.0": "abc123"}, "tags": {"v1.0": "def456"}}
 
 
+def test_resolve_sends_series_param_and_parses_preferred():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/code/resolve/sale"
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json={
+                "module_name": "sale",
+                "series": "19.0",
+                "candidates": [{"repo": "odoo/odoo", "kind": "core"}],
+                "preferred": {"repo": "odoo/odoo", "kind": "core"},
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    result = client.resolve("sale", series="19.0")
+
+    assert captured["params"] == {"series": "19.0"}
+    assert result.module_name == "sale"
+    assert result.series == "19.0"
+    assert len(result.candidates) == 1
+    assert result.candidates[0].repo == "odoo/odoo"
+    assert result.candidates[0].kind == "core"
+    assert result.preferred is not None
+    assert result.preferred.repo == "odoo/odoo"
+    assert result.preferred.kind == "core"
+
+
+def test_resolve_returns_none_preferred_when_ambiguous():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "module_name": "some_module",
+                "series": "19.0",
+                "candidates": [
+                    {"repo": "oca/repo-a", "kind": "oca"},
+                    {"repo": "oca/repo-b", "kind": "oca"},
+                ],
+                "preferred": None,
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    result = client.resolve("some_module", series="19.0")
+
+    assert result.preferred is None
+    assert len(result.candidates) == 2
+
+
 def test_resolve_expand_sends_expected_body_and_parses_ambiguous_unavailable():
     captured = {}
 

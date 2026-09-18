@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-18
+
+### Added
+
+- `CartographerClient.resolve(module_name, series)` — `GET /v1/code/resolve/{module_name}`,
+  every provider-kind repo hosting a module name at a series plus the catalog's auto-picked
+  preferred candidate. Needed to find which repo hosts an arbitrary installed module name (core,
+  enterprise, OCA, third-party) so its own `depends` can be fetched via `module_detail` —
+  `resolve_expand` deliberately excludes core/enterprise from its output and never returns
+  `depends`, so it can't answer that on its own.
+
 ## [0.9.1] - 2026-09-18
 
 ### Fixed
