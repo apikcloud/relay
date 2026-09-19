@@ -245,6 +245,135 @@ def test_available_modules_depends_none_when_not_requested():
     assert results[0].depends is None
 
 
+def test_custom_modules_sends_expected_params_and_parses_symlink_entry():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/code/custom/apik/client-repo/modules"
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json={
+                "repo": "apik/client-repo",
+                "repo_url": "https://github.com/apik/client-repo",
+                "ref": "v1.2.92",
+                "ref_kind": "tag",
+                "odoo_version_raw": "ofleet/odoo:13-20230607-enterprise",
+                "odoo_major_version": "13.0",
+                "release": "20230607",
+                "edition": "enterprise",
+                "requirements_python": ["ofxparse"],
+                "requirements_bin": [],
+                "count": 1,
+                "results": [
+                    {
+                        "module_name": "account_bank_statement_import_ofx",
+                        "origin": "symlink",
+                        "sha": "deadbeef",
+                        "name": None,
+                        "summary": None,
+                        "license": None,
+                        "odoo_major_version": None,
+                        "version_flag": "unresolved",
+                        "submodule_repo": "oca/bank-statement-import",
+                        "submodule_sha": "cafebabe",
+                        "submodule_path": "account_bank_statement_import_ofx",
+                        "submodule_branch": "13.0",
+                        "hosted_by": [
+                            {
+                                "repo": "oca/bank-statement-import",
+                                "kind": "unknown",
+                                "is_preferred": True,
+                            },
+                            {
+                                "repo": "odoo/enterprise",
+                                "kind": "enterprise",
+                                "is_preferred": False,
+                            },
+                        ],
+                        "depends": ["account_bank_statement_import"],
+                        "depends_source": {
+                            "kind": "resolve_only_reference",
+                            "repo": "oca/bank-statement-import",
+                            "ref": "13.0",
+                            "sha": "cafebabe",
+                        },
+                    }
+                ],
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    result = client.custom_modules(
+        "apik/client-repo", "v1.2.92", include_dependencies=True
+    )
+
+    assert captured["params"] == {"ref": "v1.2.92", "include_dependencies": "true"}
+    assert result.repo == "apik/client-repo"
+    assert result.odoo_major_version == "13.0"
+    assert result.edition == "enterprise"
+    assert result.count == 1
+    module = result.results[0]
+    assert module.origin == "symlink"
+    assert module.depends == ["account_bank_statement_import"]
+    assert module.depends_source is not None
+    assert module.depends_source.kind == "resolve_only_reference"
+    assert len(module.hosted_by) == 2
+    preferred = next(h for h in module.hosted_by if h.is_preferred)
+    assert preferred.repo == "oca/bank-statement-import"
+    assert preferred.kind == "unknown"
+
+
+def test_custom_modules_flat_origin_has_no_depends_source_when_not_requested():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "repo": "apik/client-repo",
+                "repo_url": "https://github.com/apik/client-repo",
+                "ref": "main",
+                "ref_kind": "branch",
+                "odoo_version_raw": None,
+                "odoo_major_version": None,
+                "release": None,
+                "edition": None,
+                "requirements_python": [],
+                "requirements_bin": [],
+                "count": 1,
+                "results": [
+                    {
+                        "module_name": "my_module",
+                        "origin": "flat",
+                        "sha": "deadbeef",
+                        "name": "My Module",
+                        "summary": None,
+                        "license": "AGPL-3",
+                        "odoo_major_version": "19.0",
+                        "version_flag": "declared_unverified",
+                        "submodule_repo": None,
+                        "submodule_sha": None,
+                        "submodule_path": None,
+                        "submodule_branch": None,
+                        "hosted_by": [],
+                        "depends": None,
+                        "depends_source": None,
+                    }
+                ],
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    result = client.custom_modules("apik/client-repo", "main")
+
+    module = result.results[0]
+    assert module.origin == "flat"
+    assert module.hosted_by == []
+    assert module.depends is None
+    assert module.depends_source is None
+
+
 def test_resolve_expand_sends_expected_body_and_parses_ambiguous_unavailable():
     captured = {}
 

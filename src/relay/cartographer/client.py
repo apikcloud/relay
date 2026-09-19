@@ -91,6 +91,63 @@ class AvailableModule:
     depends: list[str] | None
 
 
+@dataclass(slots=True)
+class HostedByCandidate:
+    repo: str
+    kind: str
+    is_preferred: bool
+
+
+@dataclass(slots=True)
+class DependsSource:
+    kind: str
+    repo: str | None
+    ref: str | None
+    sha: str | None
+
+
+@dataclass(slots=True)
+class CustomRefModule:
+    """One module a custom repo carries at one ref. `origin` is `"flat"`
+    (the repo holds the source itself) or `"symlink"` (a root symlink
+    activates a vendored `.gitmodules` submodule — `submodule_*` are that
+    pointer). When `depends` was requested, a symlinked module's `depends`
+    is followed through to wherever it really lives (its own row stores an
+    empty manifest) and `depends_source` names which tier answered."""
+
+    module_name: str
+    origin: str
+    sha: str
+    name: str | None
+    summary: str | None
+    license: str | None
+    odoo_major_version: str | None
+    version_flag: str
+    submodule_repo: str | None
+    submodule_sha: str | None
+    submodule_path: str | None
+    submodule_branch: str | None
+    hosted_by: list[HostedByCandidate]
+    depends: list[str] | None
+    depends_source: DependsSource | None
+
+
+@dataclass(slots=True)
+class CustomRefModules:
+    repo: str
+    repo_url: str
+    ref: str
+    ref_kind: str
+    odoo_version_raw: str | None
+    odoo_major_version: str | None
+    release: str | None
+    edition: str | None
+    requirements_python: list[str]
+    requirements_bin: list[str]
+    count: int
+    results: list[CustomRefModule]
+
+
 class CartographerClient:
     """Reads Cartographer's catalog — module discovery, classification,
     dependencies for client/custom repos, and Odoo base-image tags.
@@ -156,6 +213,74 @@ class CartographerClient:
         resp = self._client.get(f"/v1/code/custom/{repo}/refs")
         resp.raise_for_status()
         return resp.json()
+
+    def custom_modules(
+        self, repo: str, ref: str, include_dependencies: bool = False
+    ) -> CustomRefModules:
+        """Every module `repo` carries at `ref`, with symlinked/submodule
+        entries already resolved to their real provider's `depends` when
+        `include_dependencies` is true — no need to separately walk
+        `.gitmodules`/`hosted_by` or fall back to `module_detail` per name,
+        which returns an empty stub for a symlinked entry Cartographer
+        hasn't crawled as a first-class provider (e.g. an unlisted OCA
+        repo). `odoo_major_version`/`release`/`edition` are parsed out of
+        this ref's `odoo_version.txt` content (itself a DockerHub image
+        reference) — no need to parse it client-side either."""
+        resp = self._client.get(
+            f"/v1/code/custom/{repo}/modules",
+            params={"ref": ref, "include_dependencies": include_dependencies},
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        return CustomRefModules(
+            repo=body["repo"],
+            repo_url=body["repo_url"],
+            ref=body["ref"],
+            ref_kind=body["ref_kind"],
+            odoo_version_raw=body["odoo_version_raw"],
+            odoo_major_version=body["odoo_major_version"],
+            release=body["release"],
+            edition=body["edition"],
+            requirements_python=body["requirements_python"],
+            requirements_bin=body["requirements_bin"],
+            count=body["count"],
+            results=[
+                CustomRefModule(
+                    module_name=m["module_name"],
+                    origin=m["origin"],
+                    sha=m["sha"],
+                    name=m["name"],
+                    summary=m["summary"],
+                    license=m["license"],
+                    odoo_major_version=m["odoo_major_version"],
+                    version_flag=m["version_flag"],
+                    submodule_repo=m["submodule_repo"],
+                    submodule_sha=m["submodule_sha"],
+                    submodule_path=m["submodule_path"],
+                    submodule_branch=m["submodule_branch"],
+                    hosted_by=[
+                        HostedByCandidate(
+                            repo=h["repo"],
+                            kind=h["kind"],
+                            is_preferred=h["is_preferred"],
+                        )
+                        for h in m["hosted_by"]
+                    ],
+                    depends=m["depends"],
+                    depends_source=(
+                        DependsSource(
+                            kind=m["depends_source"]["kind"],
+                            repo=m["depends_source"]["repo"],
+                            ref=m["depends_source"]["ref"],
+                            sha=m["depends_source"]["sha"],
+                        )
+                        if m["depends_source"]
+                        else None
+                    ),
+                )
+                for m in body["results"]
+            ],
+        )
 
     def resolve(self, module_name: str, series: str) -> ResolveResult:
         """Every provider-kind repo (core/enterprise/oca/third_party) that hosts

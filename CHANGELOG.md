@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-09-19
+
+### Added
+
+- `CartographerClient.custom_modules(repo, ref, include_dependencies=False)`
+  — `GET /v1/code/custom/{repo}/modules`, every module a custom repo
+  carries at one ref, with symlinked/submodule entries already resolved to
+  their real provider's `depends` server-side. Replaces having to fall
+  back to `module_detail` per name, which returns an empty stub for a
+  symlinked entry pointing at a provider Cartographer hasn't crawled as a
+  first-class source (e.g. an OCA repo outside its seed list) — the exact
+  gap this was built to close. Also returns `odoo_major_version` already
+  parsed out of the ref's `odoo_version.txt` (a DockerHub image
+  reference), so callers no longer need to parse it themselves.
+
 ## [0.11.0] - 2026-09-19
 
 ### Added
