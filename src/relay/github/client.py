@@ -110,6 +110,15 @@ class GithubClient:
         resp.raise_for_status()
         return True
 
+    def get_repo(self, repo: str) -> dict[str, Any]:
+        """Raw `GET /repos/{repo}` metadata (`description`, `default_branch`,
+        `private`, `permissions`, ...). Raises on any HTTP error, 404
+        included — GitHub answers 404 for a private repo the token can't see,
+        so a missing repo is never silently read as empty metadata."""
+        resp = self._client.get(f"/repos/{repo}")
+        resp.raise_for_status()
+        return resp.json()
+
     def create_branch(self, branch: str, from_sha: str) -> None:
         resp = self._client.post(
             f"/repos/{self.repo}/git/refs",

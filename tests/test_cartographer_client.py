@@ -1,8 +1,9 @@
 import json
 
 import httpx
+import pytest
 
-from relay.cartographer.client import CartographerClient
+from relay.cartographer.client import BaseImageTag, CartographerClient
 from relay.cartographer.config import CartographerConfig
 
 
@@ -460,3 +461,58 @@ def test_base_images_sends_expected_params_and_parses_results():
     assert images[0].digest == "sha256:abc"
     assert images[0].version == "19.0"
     assert images[0].edition == "enterprise"
+
+
+def test_base_images_passes_source_and_sort_and_parses_repository():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "repo": "apik/odoo",
+                        "namespace": "apik",
+                        "name": "odoo",
+                        "tag": "19.0-20260906-enterprise",
+                        "digest": None,
+                        "full_size": 1,
+                        "tag_last_updated": None,
+                        "version": "19.0",
+                        "edition": "enterprise",
+                        "release": "20260906",
+                    }
+                ],
+                "total": 1,
+                "limit": 100,
+                "offset": 0,
+                "sort": "-release",
+            },
+        )
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    (image,) = client.base_images(
+        version="19.0", edition="enterprise", source="apik/odoo", sort="-release"
+    )
+
+    assert captured["params"] == {
+        "version": "19.0",
+        "edition": "enterprise",
+        "limit": "100",
+        "source": "apik/odoo",
+        "sort": "-release",
+    }
+    assert image.repo == "apik/odoo"
+    assert (image.namespace, image.name) == ("apik", "odoo")
+    assert image.release == "20260906"
+    assert image.image == "apik/odoo:19.0-20260906-enterprise"
+
+
+def test_base_image_without_repository_has_no_image_reference():
+    image = BaseImageTag(tag="19.0-enterprise", digest=None, version="19.0", edition="enterprise")
+
+    with pytest.raises(ValueError, match="no repository"):
+        _ = image.image

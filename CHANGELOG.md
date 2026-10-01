@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-10-01
+
+### Added
+
+- `BaseImageTag.repo`, `.namespace`, `.name` and `.release` — the
+  DockerHub repository and dated release Cartographer already returns for
+  each base-image tag, previously dropped. `base-images` spans several
+  repositories (`library/odoo`, `apik/odoo`, `apik/dev`, ...), so a bare
+  `tag` wasn't a pullable reference; `BaseImageTag.image` now gives the full
+  `repo:tag` (e.g. `apik/odoo:19.0-20260906-enterprise`).
+- `CartographerClient.base_images(..., source=None, sort=None)` — filter to
+  one repository or namespace, and order with Cartographer's sort syntax
+  (`sort="-release"`: newest dated build first).
+- `GithubClient.get_repo(repo)` — raw `GET /repos/{repo}` metadata
+  (description, default branch, permissions, ...); raises on 404.
+
 ## [0.12.0] - 2026-09-19
 
 ### Added

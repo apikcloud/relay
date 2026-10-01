@@ -553,3 +553,23 @@ def test_list_org_repos_paginates_until_empty_page():
     result = client.list_org_repos("oca")
 
     assert result == ["oca/a", "oca/b", "oca/c"]
+
+
+def test_get_repo_returns_metadata():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/repos/apik/client-repo"
+        return httpx.Response(200, json={"full_name": "apik/client-repo", "description": "Client"})
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    assert client.get_repo("apik/client-repo")["description"] == "Client"
+
+
+def test_get_repo_raises_on_404():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"message": "Not Found"})
+
+    client = _make_client(httpx.MockTransport(handler))
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.get_repo("apik/private-repo")

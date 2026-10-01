@@ -64,6 +64,20 @@ class BaseImageTag:
     digest: str | None
     version: str | None
     edition: str | None
+    # DockerHub repository the tag belongs to — `base-images` spans several
+    # (`library/odoo`, `apik/odoo`, `apik/dev`, ...), so `tag` alone is not a
+    # pullable reference. Defaulted so older callers/fixtures keep working.
+    repo: str | None = None
+    namespace: str | None = None
+    name: str | None = None
+    release: str | None = None  # dated build, e.g. "20260906"; None for floating tags
+
+    @property
+    def image(self) -> str:
+        """Full `repo:tag` reference, e.g. `apik/odoo:19.0-20260906-enterprise`."""
+        if self.repo is None:
+            raise ValueError(f"tag {self.tag!r} has no repository")
+        return f"{self.repo}:{self.tag}"
 
 
 @dataclass(slots=True)
@@ -367,11 +381,24 @@ class CartographerClient:
             requirements_bin=body["requirements_bin"],
         )
 
-    def base_images(self, version: str, edition: str) -> list[BaseImageTag]:
-        resp = self._client.get(
-            "/v1/images/base-images",
-            params={"version": version, "edition": edition, "limit": 100},
-        )
+    def base_images(
+        self,
+        version: str,
+        edition: str,
+        source: str | None = None,
+        sort: str | None = None,
+    ) -> list[BaseImageTag]:
+        """`GET /v1/images/base-images` — base-image tags across every
+        `base_image` repository. `source` filters to one repository's full
+        name (`apik/odoo`) or a bare namespace (`apik`); `sort` takes
+        Cartographer's sort syntax (`-release`: newest dated build first,
+        undated tags last). Server default order is `-tag_last_updated`."""
+        params: dict[str, Any] = {"version": version, "edition": edition, "limit": 100}
+        if source is not None:
+            params["source"] = source
+        if sort is not None:
+            params["sort"] = sort
+        resp = self._client.get("/v1/images/base-images", params=params)
         resp.raise_for_status()
         return [
             BaseImageTag(
@@ -379,6 +406,10 @@ class CartographerClient:
                 digest=t["digest"],
                 version=t["version"],
                 edition=t["edition"],
+                repo=t.get("repo"),
+                namespace=t.get("namespace"),
+                name=t.get("name"),
+                release=t.get("release"),
             )
             for t in resp.json()["results"]
         ]
