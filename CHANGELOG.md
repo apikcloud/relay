@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-10-30
+
+### Added
+
+- `relay.notify.html`: shared HTML email layout (pale grey page, white
+  centered content area, inline styles for email clients).
+  `render_email()` wraps ready-made HTML; `markdown_to_html()` converts
+  Markdown (tables included) and wraps it
+- The `notify` extra now pulls in `markdown>=3.5`, needed only by
+  `relay.notify.html` (the client itself still needs httpx alone)
+
 ## [0.14.0] - 2026-10-30
 
 ### Changed

@@ -2,6 +2,15 @@
 
 This page summarizes what's new and fixed in each version.
 
+## [0.15.0] - 2026-10-30
+
+Better-looking emails, with one shared layout for every mailing. ✉️
+
+### ✨ What's new
+
+- Email notifications can now share a clean, consistent layout that reads well in common email clients and on phones
+- Reports written in Markdown, tables included, can be turned straight into a formatted email
+
 ## [0.14.0] - 2026-10-30
 
 Clearer errors when a notification is too long to deliver. 📬
