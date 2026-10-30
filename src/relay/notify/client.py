@@ -58,7 +58,12 @@ class NotifyClient:
         if tag is None:
             tag = self._config.jobs_tag
 
-        payload = {"title": title, "body": body, "tag": tag, "type": notify_type}
+        payload = {
+            "title": title,
+            "body": body,
+            "tag": tag,
+            "type": Status(notify_type).value,
+        }
         if body_format:
             payload["format"] = body_format
 
@@ -137,7 +142,14 @@ class NotifyClient:
         if tag is None:
             tag = self._config.reports_tag
 
-        data = {"title": title, "body": body, "tag": ",".join(tag), "type": notify_type}
+        # Form fields are sent as str(value): a Status member would go out as
+        # "Status.WARNING", which Apprise rejects ("Invalid FORM Payload").
+        data = {
+            "title": title,
+            "body": body,
+            "tag": ",".join(tag),
+            "type": Status(notify_type).value,
+        }
         if body_format:
             data["format"] = body_format
 
