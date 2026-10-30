@@ -30,3 +30,18 @@ Pull only what a service needs via extras:
 Each client composes its own config around `relay.core.config.TransportConfig`,
 and exposes a `from_env()` constructor plus an `is_active` property (a missing
 or invalid env config yields an inactive, no-op instance instead of raising).
+
+### HTML emails
+
+`relay.notify.html` (needs the `notify` extra, which brings `markdown`) gives
+every mailing the same layout: a pale grey page with a white content area
+(90% of the width, at most 1000px), styled inline for email clients.
+
+    from relay.notify.html import markdown_to_html
+
+    body = markdown_to_html("# Report\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n",
+                            title="Report", footer="Sent by my-job")
+    notifier.notify_with_attachment(title="Report", body=body, body_format="html", ...)
+
+`render_email(html)` wraps HTML you built yourself in the same layout. Colors
+and widths are module constants (`PAGE_BACKGROUND`, `CONTENT_WIDTH`, …).
