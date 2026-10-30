@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-10-30
+
+### Changed
+
+- `NotifyClient.notify()` and `notify_with_attachment()` now raise
+  `ValueError` when `body` is over 32768 chars (`MAX_BODY_LEN`), even when
+  the client is inactive. The notify gateway rejects such a body with a bare
+  400 ("Bad FORM Payload provided"), so it was previously logged and dropped.
+  Send long content (e.g. a full HTML report) as the attachment and keep the
+  body short.
+
+### Fixed
+
+- A failed notification's warning log now includes the gateway's response
+  text, not just the HTTP status
+
 ## [0.13.1] - 2026-10-30
 
 ### Fixed

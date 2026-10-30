@@ -2,6 +2,19 @@
 
 This page summarizes what's new and fixed in each version.
 
+## [0.14.0] - 2026-10-30
+
+Clearer errors when a notification is too long to deliver. 📬
+
+### 🔄 Improvements
+
+- Notifications with an overly long message now fail immediately with a clear error, instead of being silently dropped by the notification service
+- When a notification is rejected, the logs now explain why
+
+### ⚠️ Points d'attention
+
+- Notification messages are limited to 32,768 characters. Services sending long reports should put the full report in the attachment and keep the message itself short.
+
 ## [0.13.1] - 2026-10-30
 
 A small fix to keep report notifications flowing. 🛠️
