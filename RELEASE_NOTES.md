@@ -2,6 +2,14 @@
 
 This page summarizes what's new and fixed in each version.
 
+## [0.13.1] - 2026-10-30
+
+A small fix to keep report notifications flowing. 🛠️
+
+### 🐛 Fixes
+
+- Fixed notifications with an attached report (e.g. warnings) being rejected by the notification service
+
 ## [0.3.1] - 2026-08-18
 
 ### 🐛 Fixes
