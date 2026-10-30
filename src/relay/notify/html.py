@@ -8,8 +8,11 @@ is built from nested tables and every tag is styled inline.
 
 import html
 import re
+from urllib.parse import urlsplit
 
 import markdown
+from markdown.extensions import Extension
+from markdown.treeprocessors import Treeprocessor
 
 PAGE_BACKGROUND = "#f2f3f5"
 CONTENT_BACKGROUND = "#ffffff"
@@ -29,6 +32,14 @@ _CONTENT_STYLES = {
     "h2": "font-size: 17px; margin: 24px 0 8px",
     "h3": "font-size: 15px; margin: 16px 0 8px",
 }
+
+#: Link and image URL schemes kept by `markdown_to_html()`. Any other scheme
+#: (javascript:, data:, vbscript:…) loses its href/src; scheme-less URLs stay.
+SAFE_URL_SCHEMES = frozenset({"http", "https", "mailto"})
+
+# Browsers decode character references in an attribute ("&#106;avascript:")
+# and ignore control characters and spaces in a URL scheme ("java\tscript:").
+_URL_IGNORED_RE = re.compile(r"[\x00-\x20]")
 
 # Only clients that keep <style> apply it: a phone gets the full width.
 _HEAD_STYLE = "@media (max-width: 600px) { .content { width: 100% !important; } }"
@@ -83,12 +94,41 @@ def render_email(content: str, title: str = "", footer: str = "") -> str:
     )
 
 
+class _SafeUrls(Treeprocessor):
+    """Remove an `<a href>` or `<img src>` whose scheme is not safe."""
+
+    def run(self, root):
+        for el in root.iter():
+            attr = {"a": "href", "img": "src"}.get(el.tag)
+            if attr is None or attr not in el.attrib:
+                continue
+            url = _URL_IGNORED_RE.sub("", html.unescape(el.get(attr)))
+            scheme = urlsplit(url).scheme.lower()
+            if scheme and scheme not in SAFE_URL_SCHEMES:
+                del el.attrib[attr]
+
+
+class _EscapeHtml(Extension):
+    """Treat raw HTML in the Markdown source as text, and drop unsafe URLs:
+    the Markdown carries data (names, details) from outside."""
+
+    def extendMarkdown(self, md):
+        md.preprocessors.deregister("html_block")
+        md.inlinePatterns.deregister("html")
+        # After "unescape" (priority 0): URLs are final there.
+        md.treeprocessors.register(_SafeUrls(md), "safe_urls", -1)
+
+
 def markdown_to_html(content: str, title: str = "", footer: str = "") -> str:
     """Convert Markdown (with tables) to a complete HTML email, see
-    `render_email()`."""
+    `render_email()`.
+
+    Raw HTML in ``content`` is escaped and shown as text, and only http,
+    https, mailto and scheme-less link and image URLs are kept: any other
+    scheme (javascript:, data:…) loses its href/src."""
     body = markdown.markdown(
         content,
-        extensions=["tables"],
+        extensions=["tables", _EscapeHtml()],
         # Alignment as an attribute leaves the style attribute free below.
         extension_configs={"tables": {"use_align_attribute": True}},
     )
