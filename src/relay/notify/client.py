@@ -8,6 +8,24 @@ from .config import NotifyConfig
 
 logger = logging.getLogger(__name__)
 
+# The gateway's form validation rejects a longer body outright ("Bad FORM
+# Payload provided"), before Apprise's own overflow handling could apply.
+MAX_BODY_LEN = 32768
+
+
+def _check_body(body: str) -> None:
+    if len(body) > MAX_BODY_LEN:
+        raise ValueError(
+            f"Notification body is {len(body)} chars, over the gateway's"
+            f" {MAX_BODY_LEN} limit; send the full content as an attachment"
+        )
+
+
+def _failure_detail(exc: httpx.HTTPError) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.text
+    return ""
+
 
 class NotifyClient:
     """Talks to the shared `notify-gateway` (an Apprise API instance).
@@ -52,6 +70,7 @@ class NotifyClient:
         notify_type: Status = Status.INFO,
         body_format: str | None = None,
     ) -> None:
+        _check_body(body)
         if not self.is_active:
             return
 
@@ -71,7 +90,7 @@ class NotifyClient:
             response = self._client.post(self._config.base_url, json=payload)
             response.raise_for_status()
         except httpx.HTTPError as exc:
-            logger.warning("Notification failed: %s", exc)
+            logger.warning("Notification failed: %s %s", exc, _failure_detail(exc))
 
     def info(
         self,
@@ -136,6 +155,7 @@ class NotifyClient:
         tag: list[str] | None = None,
         body_format: str = "markdown",
     ) -> None:
+        _check_body(body)
         if not self.is_active:
             return
 
@@ -161,4 +181,8 @@ class NotifyClient:
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
-            logger.warning("Notification with attachment failed: %s", exc)
+            logger.warning(
+                "Notification with attachment failed: %s %s",
+                exc,
+                _failure_detail(exc),
+            )

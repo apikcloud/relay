@@ -1,9 +1,10 @@
 import json
 
 import httpx
+import pytest
 
 from relay.core.models import Status
-from relay.notify.client import NotifyClient
+from relay.notify.client import MAX_BODY_LEN, NotifyClient
 from relay.notify.config import NotifyConfig
 
 
@@ -67,3 +68,41 @@ def test_notify_with_attachment_accepts_plain_type_value():
     )
 
     assert _form_fields(requests[0])["type"] == "failure"
+
+
+def test_notify_rejects_body_over_gateway_limit():
+    requests: list[httpx.Request] = []
+    client = _make_client(requests)
+
+    with pytest.raises(ValueError, match="32769 chars"):
+        client.notify(title="t", body="x" * (MAX_BODY_LEN + 1))
+    with pytest.raises(ValueError):
+        client.notify_with_attachment(
+            title="t", body="x" * (MAX_BODY_LEN + 1), content="x"
+        )
+    assert requests == []
+
+
+def test_notify_accepts_body_at_gateway_limit():
+    requests: list[httpx.Request] = []
+    _make_client(requests).notify(title="t", body="x" * MAX_BODY_LEN)
+
+    assert len(requests) == 1
+
+
+def test_inactive_client_still_rejects_oversized_body():
+    with pytest.raises(ValueError):
+        NotifyClient(None).notify(title="t", body="x" * (MAX_BODY_LEN + 1))
+
+
+def test_failure_logs_response_text(caplog):
+    client = NotifyClient(NotifyConfig(base_url="http://notify.test/notify/key"))
+    client._client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(400, text="Bad FORM Payload provided")
+        )
+    )
+
+    client.notify_with_attachment(title="t", body="b", content="x")
+
+    assert "Bad FORM Payload provided" in caplog.text
