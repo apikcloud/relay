@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1] - 2026-10-30
+
+### Security
+
+- `markdown_to_html()` now escapes raw HTML in the Markdown source (shown
+  as text) and drops link/image URLs whose scheme is not http, https or
+  mailto (`javascript:`, `data:`…), since the Markdown carries data from
+  outside. Scheme-less URLs are kept. Callers relying on raw HTML passing
+  through must switch to `render_email()` with ready-made HTML
+
 ## [0.15.0] - 2026-10-30
 
 ### Added

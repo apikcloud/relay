@@ -2,6 +2,14 @@
 
 This page summarizes what's new and fixed in each version.
 
+## [0.15.1] - 2026-10-30
+
+Safer Markdown emails. 🔒
+
+### 🐛 Fixes
+
+- Emails built from Markdown no longer let embedded HTML or unsafe links through: outside content is shown as plain text, and only regular web and email links are kept
+
 ## [0.15.0] - 2026-10-30
 
 Better-looking emails, with one shared layout for every mailing. ✉️
